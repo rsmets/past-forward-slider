@@ -5,12 +5,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { transformImageForTimePeriod } from './services/geminiService';
+import { createAlbumPage } from './lib/albumUtils';
 import PolaroidCard from './components/PolaroidCard';
 import ImageMorpher from './components/ImageMorpher';
 
-const TIME_SHIFTS = [-75, -50, -25, 25, 50, 75];
+const TIME_SHIFTS = [-300, -200, -100, 100, 200, 300];
 const TIME_LABELS = TIME_SHIFTS.map(shift => shift < 0 ? `${shift} years` : `+${shift} years`);
-const SLIDER_LABELS = ['-75 years', '-50 years', '-25 years', '0 years', '+25 years', '+50 years', '+75 years'];
+const SLIDER_LABELS = ['-300 years', '-200 years', '-100 years', '0 years', '+100 years', '+200 years', '+300 years'];
 const INITIAL_SLIDER_INDEX = 3; // Corresponds to '0 years'
 
 // Pre-defined positions for a scattered look on desktop
@@ -92,6 +93,7 @@ function App() {
     const [sliderValue, setSliderValue] = useState<number>(INITIAL_SLIDER_INDEX);
     const [appState, setAppState] = useState<'select-image' | 'confirm-image' | 'generating' | 'results-shown'>('select-image');
     const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const dragAreaRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -195,29 +197,33 @@ function App() {
         setSliderValue(INITIAL_SLIDER_INDEX);
     };
 
-    const handleDownloadCurrentImage = () => {
-        const successfulImages = SLIDER_LABELS
-            .map(label => {
-                if (label === '0 years') {
-                    return { label, status: sourceImage ? 'done' : 'error', url: sourceImage };
-                }
-                return { label, ...generatedImages[label] };
-            })
-            .filter(img => img.status === 'done' && img.url);
-
-        if (successfulImages.length === 0) return;
-
-        const closestIndex = Math.round(sliderValue);
-        const imageToDownload = successfulImages[closestIndex];
-        
-        if (imageToDownload && imageToDownload.url) {
+    const handleDownloadAlbum = async () => {
+        const successfulImagesData: Record<string, string> = {};
+        Object.entries(generatedImages).forEach(([label, data]) => {
+            if (data.status === 'done' && data.url) {
+                successfulImagesData[label] = data.url;
+            }
+        });
+    
+        if (Object.keys(successfulImagesData).length === 0) {
+            alert("No images were successfully generated to create an album.");
+            return;
+        }
+    
+        setIsDownloading(true);
+        try {
+            const albumDataUrl = await createAlbumPage(successfulImagesData);
             const link = document.createElement('a');
-            link.href = imageToDownload.url;
-            const filename = imageToDownload.label.replace(' years', 'y').replace('+', '');
-            link.download = `past-forward-${filename}.jpg`;
+            link.href = albumDataUrl;
+            link.download = 'past-forward-album.jpg';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        } catch (error) {
+            console.error("Failed to create album:", error);
+            alert("Sorry, there was an error creating your photo album.");
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -348,10 +354,11 @@ function App() {
                         <div className="h-20 mt-8 flex items-center justify-center">
                             <div className="flex flex-col sm:flex-row items-center gap-4">
                                 <button 
-                                    onClick={handleDownloadCurrentImage} 
+                                    onClick={handleDownloadAlbum} 
                                     className={primaryButtonClasses}
+                                    disabled={isDownloading}
                                 >
-                                    Download Image
+                                    {isDownloading ? 'Creating Album...' : 'Download Album'}
                                 </button>
                                 <button onClick={handleReset} className={secondaryButtonClasses}>
                                     Start Over
