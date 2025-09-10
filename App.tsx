@@ -10,6 +10,8 @@ import ImageMorpher from './components/ImageMorpher';
 
 const TIME_SHIFTS = [-75, -50, -25, 25, 50, 75];
 const TIME_LABELS = TIME_SHIFTS.map(shift => shift < 0 ? `${shift} years` : `+${shift} years`);
+const SLIDER_LABELS = ['-75 years', '-50 years', '-25 years', '0 years', '+25 years', '+50 years', '+75 years'];
+const INITIAL_SLIDER_INDEX = 3; // Corresponds to '0 years'
 
 // Pre-defined positions for a scattered look on desktop
 const POSITIONS = [
@@ -87,7 +89,7 @@ const resizeImage = (file: File): Promise<string> => {
 function App() {
     const [sourceImage, setSourceImage] = useState<string | null>(null);
     const [generatedImages, setGeneratedImages] = useState<Record<string, GeneratedImage>>({});
-    const [sliderValue, setSliderValue] = useState<number>(2); // Start slider on "-25 years"
+    const [sliderValue, setSliderValue] = useState<number>(INITIAL_SLIDER_INDEX);
     const [appState, setAppState] = useState<'select-image' | 'confirm-image' | 'generating' | 'results-shown'>('select-image');
     const [isCameraOpen, setIsCameraOpen] = useState(false);
 
@@ -190,12 +192,17 @@ function App() {
         setSourceImage(null);
         setGeneratedImages({});
         setAppState('select-image');
-        setSliderValue(2);
+        setSliderValue(INITIAL_SLIDER_INDEX);
     };
 
     const handleDownloadCurrentImage = () => {
-        const successfulImages = TIME_LABELS
-            .map(label => ({ label, ...generatedImages[label] }))
+        const successfulImages = SLIDER_LABELS
+            .map(label => {
+                if (label === '0 years') {
+                    return { label, status: sourceImage ? 'done' : 'error', url: sourceImage };
+                }
+                return { label, ...generatedImages[label] };
+            })
             .filter(img => img.status === 'done' && img.url);
 
         if (successfulImages.length === 0) return;
@@ -206,7 +213,8 @@ function App() {
         if (imageToDownload && imageToDownload.url) {
             const link = document.createElement('a');
             link.href = imageToDownload.url;
-            link.download = `past-forward-${imageToDownload.label.replace(' ', '')}.jpg`;
+            const filename = imageToDownload.label.replace(' years', 'y').replace('+', '');
+            link.download = `past-forward-${filename}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -217,6 +225,11 @@ function App() {
         // Cleanup camera stream on component unmount
         return () => stopCameraStream();
     }, [stopCameraStream]);
+    
+    const imagesForMorpher: Record<string, GeneratedImage> = {
+        ...generatedImages,
+        '0 years': { status: 'done', url: sourceImage! },
+    };
 
     return (
         <main className="bg-black text-neutral-200 min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
@@ -327,8 +340,8 @@ function App() {
                 {appState === 'results-shown' && (
                     <>
                         <ImageMorpher 
-                            images={generatedImages}
-                            labels={TIME_LABELS}
+                            images={imagesForMorpher}
+                            labels={SLIDER_LABELS}
                             sliderValue={sliderValue}
                             onSliderChange={setSliderValue}
                         />
