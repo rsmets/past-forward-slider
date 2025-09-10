@@ -1,0 +1,7 @@
+{
+  "name": "Sliding Past Forward",
+  "description": "Travel through time! Upload a photo from today and watch as AI reimagines it across three generations in the past and three in the future.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
